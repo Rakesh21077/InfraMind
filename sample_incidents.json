@@ -1,0 +1,28 @@
+{
+  "_comment": "SAMPLE INCIDENT PAYLOADS FOR INFRAMIND - MEMBER 3 INTEGRATION DEMO ONLY (ALL DATA IS FICTITIOUS)",
+  "incidents": [
+    {
+      "incident_id": "INC-S3-001",
+      "threat_type": "PUBLIC_S3_BUCKET",
+      "severity": "CRITICAL",
+      "resource_type": "AWS::S3::Bucket",
+      "resource_id": "customer-reports-bucket",
+      "recommended_action": "fix_s3_bucket",
+      "parameters": {
+        "bucket_name": "customer-reports-bucket"
+      }
+    },
+    {
+      "incident_id": "INC-IAM-002",
+      "threat_type": "COMPROMISED_ACCESS_KEY",
+      "severity": "CRITICAL",
+      "resource_type": "AWS::IAM::AccessKey",
+      "resource_id": "AKIAIOSFODNN7EXAMPLE",
+      "recommended_action": "revoke_iam_key",
+      "parameters": {
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "user_name": "developer-alice"
+      }
+    }
+  ]
+}
