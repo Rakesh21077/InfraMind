@@ -307,6 +307,7 @@ def run_worker_loop(
     sqs_client: Optional[Any] = None,
     max_batches: Optional[int] = None,
     poll_wait_seconds: int = 20,
+    demo_mode: bool = False,
 ) -> None:
     """
     Main long-polling loop for the ingestion worker.
@@ -318,9 +319,29 @@ def run_worker_loop(
     init_db()
 
     target_queue = queue_url or os.getenv("SQS_QUEUE_URL", "").strip()
-    if not target_queue:
+    is_demo = demo_mode or (os.getenv("APP_MODE", "demo").lower() == "demo" and not target_queue)
+
+    if not target_queue and not is_demo:
         logger.error("SQS_QUEUE_URL is not configured in environment or arguments. Cannot start live ingestion worker.")
         set_system_status("ingestion_status", "NOT_CONFIGURED")
+        return
+
+    if is_demo and not target_queue:
+        logger.info("Starting InfraMind Ingestion Worker in [DEMO SIMULATION] mode...")
+        logger.info("Monitoring local database and maintaining active worker heartbeat...")
+        set_system_status("ingestion_status", "RUNNING (Demo Mode)")
+        set_system_status("sqs_queue_url", "Local SQLite Buffer (Demo)")
+
+        batches_processed = 0
+        while not _SHUTDOWN_REQUESTED:
+            if max_batches is not None and batches_processed >= max_batches:
+                break
+            set_system_status("ingestion_worker_heartbeat", datetime.now(timezone.utc).isoformat())
+            time.sleep(min(poll_wait_seconds, 5))
+            batches_processed += 1
+
+        logger.info("InfraMind Ingestion Worker (Demo Mode) terminated cleanly.")
+        set_system_status("ingestion_status", "STOPPED")
         return
 
     if sqs_client is None:
