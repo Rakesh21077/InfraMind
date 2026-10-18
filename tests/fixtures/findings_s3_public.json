@@ -1,0 +1,46 @@
+{
+  "Findings": [
+    {
+      "Id": "arn:aws:securityhub:us-east-1:111122223333:finding/s3-public-financial-records",
+      "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
+      "GeneratorId": "aws-foundational-security-best-practices/v/1.0.0/S3.1",
+      "AwsAccountId": "111122223333",
+      "Types": [
+        "Software and Configuration Checks/AWS Security Best Practices/Public"
+      ],
+      "CreatedAt": "2026-10-18T08:00:00Z",
+      "UpdatedAt": "2026-10-18T08:05:00Z",
+      "Severity": {
+        "Label": "CRITICAL",
+        "Normalized": 95
+      },
+      "Title": "S3 bucket has public access block completely disabled",
+      "Description": "The S3 bucket financial-audit-records-2026 allows unrestricted anonymous public access over the internet.",
+      "Compliance": {
+        "Status": "FAILED"
+      },
+      "Resources": [
+        {
+          "Type": "AwsS3Bucket",
+          "Id": "arn:aws:s3:::financial-audit-records-2026",
+          "Region": "us-east-1",
+          "Details": {
+            "AwsS3Bucket": {
+              "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": false,
+                "IgnorePublicAcls": false,
+                "BlockPublicPolicy": false,
+                "RestrictPublicBuckets": false
+              }
+            },
+            "Tags": {
+              "Environment": "production",
+              "DataClassification": "Confidential"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

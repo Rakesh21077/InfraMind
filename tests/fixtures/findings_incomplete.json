@@ -1,0 +1,16 @@
+{
+  "Findings": [
+    {
+      "Id": "arn:aws:securityhub:us-east-1:111122223333:finding/incomplete-critical-alert",
+      "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
+      "CreatedAt": "2026-10-18T09:00:00Z",
+      "Severity": {
+        "Label": "CRITICAL"
+      },
+      "Title": "Suspicious API activity observed from external IP",
+      "Description": "High-severity anomaly reported by automated monitoring. Resource details and caller identity unavailable in telemetry.",
+      "Resources": []
+    }
+  ]
+}
+
