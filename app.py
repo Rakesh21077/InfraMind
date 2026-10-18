@@ -227,6 +227,9 @@ if st.session_state.app_mode == "live" and not sqs_queue_url:
         "The system cannot poll real AWS CloudTrail events until the AWS CloudFormation pipeline (`infra/cloudformation-realtime.yaml`) "
         "is deployed and the SQS Queue URL is provided. Switch to **Demo Mode** in the sidebar to test offline with sample events."
     )
+    if st.button("🔄 Switch to Demo Mode (Offline)", key="switch_to_demo_banner_btn"):
+        st.session_state.app_mode = "demo"
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Executive KPI Metrics Row

@@ -114,6 +114,7 @@ class TestAgentAnalysis(unittest.TestCase):
         self.assertEqual(sanitized["priority"], "HIGH")  # Invalid priority coerced
         self.assertEqual(sanitized["remediation_action"], "fix_s3_bucket")  # Whitelisted fallback
 
+    @patch.dict(os.environ, {"AI_PROVIDER": "amd"})
     @patch("openai.OpenAI")
     def test_llm_happy_path(self, mock_openai_cls):
         """Verify successful LLM response is parsed and validated."""
