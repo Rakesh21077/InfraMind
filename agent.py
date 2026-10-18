@@ -1,17 +1,20 @@
 """
-InfraMind - AI Threat Detection & Analysis Engine (Member 2 Module)
+InfraMind — AI Threat Detection & Analysis Engine (Member 2 Module)
 AI Cloud Security Guardrail for Startups & IT
 
-This module provides AI-driven log analysis and an incident history conversational assistant:
-1. analyze_security_log(log_event): Ingests a raw cloud security event, evaluates threat severity,
-   calculates blast radius estimates, and recommends targeted remediation actions.
+Provides AI-driven log analysis and an incident history conversational assistant:
+1. analyze_security_log(log_event): Ingests raw cloud security events, evaluates threat severity,
+   calculates blast-radius risk estimates, and recommends targeted remediation actions.
 2. ask_incident_history(question, logs, analyses): Answers natural-language operator questions
    concerning ingested logs, active incidents, remediation statuses, and threat metrics.
 
-Hardware & Model Connectivity:
-- Primary: AMD ROCm vLLM / OpenAI-compatible API endpoint (configured via AMD_ENDPOINT_URL & MODEL_NAME).
-- Local Alternative: Local Ollama endpoint (e.g. http://localhost:11434/v1).
-- Offline Resiliency: Deterministic rule-based fallback when model endpoints are unreachable or timeout.
+Configurable AI Providers:
+- 'amd' / 'vllm': AMD Developer Cloud / Instinct GPU endpoint running ROCm vLLM.
+- 'ollama': Local Ollama developer instance (http://localhost:11434/v1).
+- 'deterministic_fallback': High-fidelity rule-based engine requiring zero network connections.
+
+Analysis Caching:
+- Caches results by event_id to prevent redundant inference calls on Streamlit reruns.
 """
 
 import json
@@ -23,7 +26,6 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
-# Load local environment configuration without overwriting active runtime vars
 load_dotenv(override=False)
 
 logger = logging.getLogger("inframind.agent")
@@ -41,14 +43,41 @@ logger.setLevel(logging.INFO)
 VALID_PRIORITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 VALID_REMEDIATIONS = {"fix_s3_bucket", "revoke_iam_key", "none"}
 
+# In-memory analysis cache: event_id -> analysis_dict
+_ANALYSIS_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def clear_analysis_cache() -> None:
+    """Clear the in-memory analysis cache."""
+    _ANALYSIS_CACHE.clear()
+
 
 def get_llm_config() -> Dict[str, str]:
-    """Retrieve active LLM endpoint configuration from environment variables."""
-    endpoint_url = os.getenv("AMD_ENDPOINT_URL", "http://localhost:11434/v1").strip()
-    model_name = os.getenv("MODEL_NAME", "llama3:8b").strip()
+    """Retrieve active LLM endpoint and provider configuration from environment variables."""
+    provider = os.getenv("AI_PROVIDER", "amd").strip().lower()
+
+    if provider in ("amd", "vllm"):
+        endpoint_url = os.getenv("AMD_ENDPOINT_URL", "http://localhost:11434/v1").strip()
+        model_name = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct").strip()
+        display_label = f"AMD ROCm vLLM / {model_name}"
+    elif provider == "deterministic_fallback":
+        endpoint_url = ""
+        model_name = "rule-based"
+        display_label = "Deterministic Rule-Based Offline Fallback Engine"
+    elif provider == "ollama":
+        endpoint_url = os.getenv("OLLAMA_ENDPOINT_URL", "http://localhost:11434/v1").strip()
+        model_name = os.getenv("MODEL_NAME", "llama3:8b").strip()
+        display_label = f"Ollama Local LLM / {model_name}"
+    else:
+        endpoint_url = os.getenv("AMD_ENDPOINT_URL", "http://localhost:11434/v1").strip()
+        model_name = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct").strip()
+        display_label = f"AMD ROCm vLLM / {model_name}"
+
     return {
+        "provider": provider,
         "endpoint_url": endpoint_url,
         "model_name": model_name,
+        "display_label": display_label,
     }
 
 
@@ -87,7 +116,7 @@ def _deterministic_analysis(log_event: Dict[str, Any]) -> Dict[str, Any]:
                 "remediation_action": "fix_s3_bucket",
                 "resource_id": resource_id,
                 "recommended_action": f"Apply AWS S3 Public Access Block to bucket '{resource_id}'.",
-                "engine": "Offline Fallback (Deterministic Rule-Based)",
+                "engine": "Deterministic Rule-Based Offline Fallback Engine",
                 "status": "ANALYZED",
             }
         else:
@@ -101,7 +130,7 @@ def _deterministic_analysis(log_event: Dict[str, Any]) -> Dict[str, Any]:
                 "remediation_action": "fix_s3_bucket",
                 "resource_id": resource_id,
                 "recommended_action": f"Verify public access block on bucket '{resource_id}'.",
-                "engine": "Offline Fallback (Deterministic Rule-Based)",
+                "engine": "Deterministic Rule-Based Offline Fallback Engine",
                 "status": "ANALYZED",
             }
 
@@ -129,7 +158,7 @@ def _deterministic_analysis(log_event: Dict[str, Any]) -> Dict[str, Any]:
             "resource_id": resource_id,
             "user_name": target_user,
             "recommended_action": f"Deactivate IAM access key '{resource_id}' for user '{target_user}'.",
-            "engine": "Offline Fallback (Deterministic Rule-Based)",
+            "engine": "Deterministic Rule-Based Offline Fallback Engine",
             "status": "ANALYZED",
         }
 
@@ -144,7 +173,7 @@ def _deterministic_analysis(log_event: Dict[str, Any]) -> Dict[str, Any]:
         "remediation_action": "none",
         "resource_id": resource_id,
         "recommended_action": "Review CloudTrail logs and audit affected resource permissions.",
-        "engine": "Offline Fallback (Deterministic Rule-Based)",
+        "engine": "Deterministic Rule-Based Offline Fallback Engine",
         "status": "ANALYZED",
     }
 
@@ -211,17 +240,19 @@ def _validate_and_sanitize_analysis(raw: Dict[str, Any], log_event: Dict[str, An
     return result
 
 
-def analyze_security_log(log_event: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_security_log(log_event: Dict[str, Any], use_cache: bool = True) -> Dict[str, Any]:
     """
     Analyze an ingested cloud security event to determine threat severity,
     blast radius impact, and recommended automated remediation.
 
+    Checks in-memory cache first if use_cache is True.
     Attempts inference via the configured AMD GPU endpoint (or local Ollama).
     Falls back gracefully to a deterministic rule-based analysis if the model
     is unavailable, unresponsive, or returns malformed output.
 
     Parameters:
       log_event (dict): The cloud security event object.
+      use_cache (bool): When True, reuses cached analysis for identical event_id.
 
     Returns:
       dict: Structured analysis containing priority, scores, summary, and action.
@@ -242,11 +273,27 @@ def analyze_security_log(log_event: Dict[str, Any]) -> Dict[str, Any]:
             "status": "FAILED",
         }
 
+    event_id = str(log_event.get("event_id", "")).strip()
+
+    # Check cache
+    if use_cache and event_id and event_id in _ANALYSIS_CACHE:
+        logger.debug("Cache hit for analysis of event [%s].", event_id)
+        return _ANALYSIS_CACHE[event_id]
+
     config = get_llm_config()
+    provider = config["provider"]
+
+    # Short-circuit to deterministic engine if explicitly configured
+    if provider == "deterministic_fallback":
+        analysis = _deterministic_analysis(log_event)
+        if event_id:
+            _ANALYSIS_CACHE[event_id] = analysis
+        return analysis
+
     endpoint_url = config["endpoint_url"]
     model_name = config["model_name"]
+    display_label = config["display_label"]
 
-    # System instruction prompting for strict JSON output
     system_prompt = (
         "You are InfraMind AI, an expert AWS cloud security engineer. "
         "Analyze the provided cloud security log event. "
@@ -273,7 +320,7 @@ def analyze_security_log(log_event: Dict[str, Any]) -> Dict[str, Any]:
         client = OpenAI(
             base_url=endpoint_url,
             api_key=os.getenv("OPENAI_API_KEY", "dummy-amd-key"),
-            timeout=3.0,  # Fast failover to prevent UI latency
+            timeout=2.0,  # Fast failover to prevent UI latency
         )
 
         response = client.chat.completions.create(
@@ -287,14 +334,16 @@ def analyze_security_log(log_event: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         content = response.choices[0].message.content or ""
-        # Clean any markdown code blocks if the model enclosed JSON in ```json ... ```
         cleaned_content = re.sub(r"^```(?:json)?\s*", "", content.strip(), flags=re.MULTILINE)
         cleaned_content = re.sub(r"```\s*$", "", cleaned_content, flags=re.MULTILINE).strip()
 
         raw_json = json.loads(cleaned_content)
-        raw_json["engine"] = f"AMD ROCm vLLM / {model_name}"
-        logger.info("Successfully analyzed %s using %s", log_event.get("event_id"), raw_json["engine"])
-        return _validate_and_sanitize_analysis(raw_json, log_event)
+        raw_json["engine"] = display_label
+        logger.info("Successfully analyzed %s using %s", event_id, display_label)
+        analysis = _validate_and_sanitize_analysis(raw_json, log_event)
+        if event_id:
+            _ANALYSIS_CACHE[event_id] = analysis
+        return analysis
 
     except Exception as exc:
         logger.info(
@@ -302,7 +351,10 @@ def analyze_security_log(log_event: Dict[str, Any]) -> Dict[str, Any]:
             endpoint_url,
             str(exc),
         )
-        return _deterministic_analysis(log_event)
+        analysis = _deterministic_analysis(log_event)
+        if event_id:
+            _ANALYSIS_CACHE[event_id] = analysis
+        return analysis
 
 
 def ask_incident_history(
@@ -331,56 +383,59 @@ def ask_incident_history(
     q_lower = question.lower().strip()
     analyses = analyses or {}
 
-    # Attempt LLM Assistant if reachable
     config = get_llm_config()
-    try:
-        from openai import OpenAI
+    provider = config["provider"]
 
-        client = OpenAI(
-            base_url=config["endpoint_url"],
-            api_key=os.getenv("OPENAI_API_KEY", "dummy-amd-key"),
-            timeout=4.0,
-        )
+    if provider != "deterministic_fallback" and config.get("endpoint_url"):
+        try:
+            from openai import OpenAI
 
-        context_summary = []
-        for log in logs:
-            eid = log.get("event_id", "")
-            analysis = analyses.get(eid, {})
-            context_summary.append({
-                "event_id": eid,
-                "timestamp": log.get("timestamp"),
-                "event_name": log.get("event_name"),
-                "resource_id": log.get("resource_id"),
-                "user_name": log.get("user_name") or log.get("user_identity", {}).get("user_name"),
-                "priority": analysis.get("priority", "UNANALYZED"),
-                "threat_score": analysis.get("threat_score"),
-                "remediation_action": analysis.get("remediation_action"),
-                "status": log.get("remediation_status", "OPEN"),
-            })
+            client = OpenAI(
+                base_url=config["endpoint_url"],
+                api_key=os.getenv("OPENAI_API_KEY", "dummy-amd-key"),
+                timeout=3.0,
+            )
 
-        system_msg = (
-            "You are InfraMind Incident Time-Machine, an AI security auditing assistant. "
-            "Answer the operator question accurately based ONLY on the provided incident logs. "
-            "Never fabricate incidents or credentials."
-        )
+            context_summary = []
+            for log in logs[:15]:  # Bounded to recent 15 records
+                eid = log.get("event_id", "")
+                analysis = analyses.get(eid, {})
+                context_summary.append({
+                    "event_id": eid,
+                    "timestamp": log.get("timestamp"),
+                    "event_name": log.get("event_name"),
+                    "resource_id": log.get("resource_id"),
+                    "user_name": log.get("user_name") or log.get("user_identity", {}).get("user_name"),
+                    "priority": analysis.get("priority", "UNANALYZED"),
+                    "threat_score": analysis.get("threat_score"),
+                    "remediation_action": analysis.get("remediation_action"),
+                    "status": log.get("remediation_status", "OPEN"),
+                })
 
-        response = client.chat.completions.create(
-            model=config["model_name"],
-            messages=[
-                {"role": "system", "content": system_msg},
-                {
-                    "role": "user",
-                    "content": f"Incident Data:\n{json.dumps(context_summary, indent=2)}\n\nQuestion: {question}",
-                },
-            ],
-            temperature=0.2,
-            max_tokens=600,
-        )
-        return response.choices[0].message.content or "No response from AI assistant."
+            system_msg = (
+                "You are InfraMind Incident Time-Machine, an AI security auditing assistant. "
+                "Answer the operator question accurately based ONLY on the provided incident logs. "
+                "Never fabricate incidents or credentials."
+            )
 
-    except Exception:
-        # Graceful Deterministic Fallback Assistant
-        return _deterministic_chat_response(q_lower, logs, analyses)
+            response = client.chat.completions.create(
+                model=config["model_name"],
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {
+                        "role": "user",
+                        "content": f"Incident Data:\n{json.dumps(context_summary, indent=2)}\n\nQuestion: {question}",
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=600,
+            )
+            return response.choices[0].message.content or "No response from AI assistant."
+
+        except Exception:
+            pass
+
+    return _deterministic_chat_response(q_lower, logs, analyses)
 
 
 def _deterministic_chat_response(
@@ -456,10 +511,10 @@ def _deterministic_chat_response(
         return "\n".join(lines)
 
     # Query 4: Specific event inquiry (e.g. "evt-101", "evt-102")
-    match_eid = re.search(r"\b(evt-\d+|incident-\d+)\b", q)
+    match_eid = re.search(r"\b(evt-\d+|incident-\d+|ct-[a-z0-9-]+|gd-[a-z0-9-]+)\b", q)
     if match_eid:
         target_eid = match_eid.group(1)
-        target_log = next((l for l in logs if str(l.get("event_id")).lower() == target_eid), None)
+        target_log = next((l for l in logs if str(l.get("event_id")).lower() == target_eid.lower()), None)
         if target_log:
             analysis = analyses.get(target_log.get("event_id"), _deterministic_analysis(target_log))
             return (
@@ -491,7 +546,7 @@ def _deterministic_chat_response(
     # Query 6: Analyzed "today" or time-based
     if any(k in q for k in ["today", "recent", "latest", "time"]):
         lines = ["### 🕒 Chronological Security Telemetry\n"]
-        for log in logs:
+        for log in logs[:10]:
             eid = log.get("event_id")
             ts = log.get("timestamp", "Timestamp unavailable")
             lines.append(f"- **`{eid}`** (`{ts}`): {log.get('event_name')} on `{log.get('resource_id')}`")

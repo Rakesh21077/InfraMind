@@ -229,3 +229,9 @@ venv/
 .pytest_cache/
 .vscode/
 .idea/
+
+# Local SQLite and incident databases
+*.db
+*.sqlite
+*.sqlite3
+data/

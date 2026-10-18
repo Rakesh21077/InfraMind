@@ -34,12 +34,14 @@
 
 ---
 
-### [1:00 – 1:30] Architecture & Technology Stack
+### [1:00 – 1:30] Architecture & Operating Modes (Version 2)
 *(Screen: Slide 5 — Architecture Diagram & Terminal)*
-> "Here is our architecture:
-> - **Telemetry Ingestion:** Ingests live CloudTrail and AWS security events.
-> - **Inference Engine:** An open-weights large language model (Llama-3-8B-Instruct) served via an **AMD Instinct GPU endpoint** utilizing **AMD ROCm and the vLLM serving container**. For offline resilience, our engine features an instant deterministic fallback.
-> - **Operator Console:** An interactive Streamlit dashboard built for human-in-the-loop oversight.
+> "Here is our Version 2 architecture:
+> - **Dual Operating Modes:** InfraMind supports both a 100% offline **Demo Mode** using curated mock logs, and an **AWS Live-Ingestion Mode** streaming genuine telemetry.
+> - **Real-Time Telemetry Pipeline:** In live mode, AWS CloudTrail and GuardDuty stream via Amazon EventBridge into an encrypted Amazon SQS queue with an automated Dead-Letter Queue.
+> - **Background Ingestion Worker:** A dedicated Python worker polls SQS, verifies S3 live posture in read-only mode, and atomically commits events to an ACID SQLite store using Write-Ahead Logging.
+> - **Inference Engine:** An open-weights large language model (Llama-3-8B-Instruct) served via an **AMD Instinct GPU endpoint** utilizing **AMD ROCm and the vLLM serving container** (or local Ollama). For offline resilience, our engine features an instant deterministic fallback with in-memory caching.
+> - **Operator Console:** An auto-refreshing Streamlit dashboard monitoring SQS queue depth and worker health with human-in-the-loop oversight.
 > - **Remediation Engine:** Production-grade Python scripts using AWS Boto3 that enforce defense-in-depth: dry-run simulations by default, operator approval checkboxes, and identity validation."
 
 ---
@@ -125,7 +127,7 @@
 > 2. **Controlled Auto-Patching:** Standardized, test-verified Boto3 remediation scripts that eliminate hours of manual console navigation.
 > 3. **Defense-in-Depth:** Default dry-run simulations, mandatory human approval, and sanitization of all credentials and tokens.
 >
-> With a complete test suite of **40+ automated unit tests** passing with zero errors, InfraMind transforms cloud security from reactive panic into proactive, controlled guardrails.
+> With a complete test suite of **63 automated unit tests** passing with zero errors across remediation, agent analysis, persistent database operations, and live SQS ingestion, InfraMind transforms cloud security from reactive panic into proactive, controlled guardrails.
 >
 > Thank you!"
 

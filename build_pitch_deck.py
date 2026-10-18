@@ -96,13 +96,13 @@ def create_deck(output_path: str):
         },
         # Slide 5
         {
-            "title": "Multi-Tier System Architecture",
-            "subtitle": "End-to-end data pipeline with human-in-the-loop safeguards",
+            "title": "Version 2: Real-Time Pipeline Architecture",
+            "subtitle": "Event-driven CloudTrail & EventBridge ingestion with persistent SQLite WAL storage",
             "points": [
-                ("Tier 1: Telemetry Ingestion", "Ingests AWS CloudTrail and event telemetry from mock_logs.json or live custom log feeds."),
-                ("Tier 2: AI Analysis Engine (agent.py)", "Connects to AMD Instinct GPU endpoints running ROCm vLLM or switches to deterministic fallback."),
-                ("Tier 3: Operator Console (app.py)", "Streamlit dashboard displaying threat severity cards, blast radius estimates, and authorization workflows."),
-                ("Tier 4: Guardrail Remediation (remediation.py)", "Boto3 execution engine enforcing default dry-run simulation and explicit human operator approval.")
+                ("Tier 1: Event Telemetry & SQS", "CloudTrail & GuardDuty stream via EventBridge to SQS with Dead-Letter Queue (DLQ) buffering."),
+                ("Tier 2: Ingestion Worker (ingestion_worker.py)", "Long-polling worker normalizes events, checks S3 live posture, and persists atomically to SQLite."),
+                ("Tier 3: AI Threat Engine (agent.py)", "Multi-provider AI (AMD Instinct ROCm vLLM / Ollama) with deterministic rule-based fallback and caching."),
+                ("Tier 4: Auto-Refreshing Console (app.py)", "Near-real-time Streamlit dashboard with dual-mode switcher (Demo vs. Live) and 1-click Boto3 remediation.")
             ]
         },
         # Slide 6
@@ -155,7 +155,7 @@ def create_deck(output_path: str):
             "subtitle": "Modern, intuitive operations console for cloud defenders",
             "points": [
                 ("Executive Threat Metrics", "Real-time KPI counters tracking total alerts, critical threats, pending reviews, and remediated incidents."),
-                ("Interactive Threat Cards", "One-click 'Analyze Alert via AMD GPU' displays risk summaries, blast radius, and target resource bindings."),
+                ("Live Telemetry & Auto-Refresh", "Monitors SQS queue depth, worker heartbeat, and auto-refreshes threat cards every 10 seconds."),
                 ("Explicit Operator Approval", "Mandatory confirmation checkbox prevents accidental clicks. Only approved actions trigger patch execution."),
                 ("Incident Time-Machine Assistant", "Conversational AI answers natural language queries: 'What API keys were flagged?', 'Which incidents are critical?'")
             ]
@@ -178,8 +178,8 @@ def create_deck(output_path: str):
             "points": [
                 ("90% Reduction in MTTR", "Mean Time to Remediate critical misconfigurations drops from hours to under 30 seconds."),
                 ("100% Elimination of Console Errors", "Pre-tested automated scripts replace risky manual AWS management console navigation."),
-                ("Verified Quality Assurance", "50 automated unit tests passing with 100% coverage across input validation, LLM analysis, and safety gates."),
-                ("Future Expansion Roadmap", "Multi-cloud coverage (Azure Blob & Google Cloud IAM), Slack/Teams approval bots, and real-time CloudWatch streaming.")
+                ("Comprehensive Verification", "63 automated unit tests passing with 100% success across remediation, agent, database, and ingestion."),
+                ("Production CloudFormation", "Ready-to-deploy infra/cloudformation-realtime.yaml provisioning SQS, DLQ, and EventBridge rules.")
             ]
         },
     ]

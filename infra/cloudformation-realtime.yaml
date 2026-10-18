@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  InfraMind Real-Time Cloud Security Event Ingestion Pipeline.
+  Provisions an EventBridge rule, Amazon SQS primary event queue,
+  dead-letter queue (DLQ), and least-privilege queue access policies.
+  Captures AWS CloudTrail S3 & IAM management events and Amazon GuardDuty findings.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: 'production'
+    AllowedValues:
+      - 'production'
+      - 'staging'
+      - 'development'
+      - 'test'
+    Description: Deployment environment tag for resource naming and isolation.
+
+  MessageRetentionPeriodDays:
+    Type: Number
+    Default: 14
+    MinValue: 1
+    MaxValue: 14
+    Description: Days to retain messages in SQS queues before automatic expiry (1 to 14 days).
+
+  MaxReceiveCountBeforeDLQ:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 20
+    Description: Number of failed worker processing attempts before sending an event to the Dead-Letter Queue.
+
+Resources:
+  # =========================================================================
+  # 1. Dead-Letter Queue (DLQ) for Poison Pill & Permanent Failure Isolation
+  # =========================================================================
+  InfraMindSecurityEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'inframind-security-events-dlq-${EnvironmentName}'
+      MessageRetentionPeriod: 1209600 # 14 days maximum retention for forensic investigation
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Application
+          Value: InfraMind
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Role
+          Value: DeadLetterQueue
+
+  # =========================================================================
+  # 2. Primary Event SQS Queue for Ingestion Worker Long Polling
+  # =========================================================================
+  InfraMindSecurityEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'inframind-security-events-queue-${EnvironmentName}'
+      VisibilityTimeout: 60 # 60 seconds processing visibility window
+      ReceiveMessageWaitTimeSeconds: 20 # Enables SQS Long Polling to eliminate empty responses & reduce API costs
+      MessageRetentionPeriod: !Sub '${MessageRetentionPeriodDays} * 86400'
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt InfraMindSecurityEventsDLQ.Arn
+        maxReceiveCount: !Ref MaxReceiveCountBeforeDLQ
+      Tags:
+        - Key: Application
+          Value: InfraMind
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Role
+          Value: SecurityEventQueue
+
+  # =========================================================================
+  # 3. Queue Access Policy: Least-Privilege Access for Amazon EventBridge
+  # =========================================================================
+  InfraMindQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref InfraMindSecurityEventsQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgeToSendSecurityMessages
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - sqs:SendMessage
+            Resource: !GetAtt InfraMindSecurityEventsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt InfraMindSecurityEventsRule.Arn
+
+  # =========================================================================
+  # 4. Amazon EventBridge Rule: Filters CloudTrail S3/IAM & GuardDuty Events
+  # =========================================================================
+  InfraMindSecurityEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'inframind-security-events-rule-${EnvironmentName}'
+      Description: Captures critical CloudTrail management events (S3, IAM) and GuardDuty findings for InfraMind.
+      State: ENABLED
+      EventPattern:
+        # Match AWS CloudTrail S3 & IAM Management API calls
+        detail-type:
+          - 'AWS API Call via CloudTrail'
+          - 'GuardDuty Finding'
+        source:
+          - 'aws.s3'
+          - 'aws.iam'
+          - 'aws.guardduty'
+        detail:
+          # Specific high-risk CloudTrail management events to minimize queue volume
+          eventName:
+            - 'PutBucketAcl'
+            - 'PutBucketPolicy'
+            - 'PutPublicAccessBlock'
+            - 'CreateAccessKey'
+            - 'UpdateAccessKey'
+            - 'AttachUserPolicy'
+            - 'PutUserPolicy'
+            - 'CreatePolicyVersion'
+      Targets:
+        - Id: InfraMindPrimarySQSTarget
+          Arn: !GetAtt InfraMindSecurityEventsQueue.Arn
+          DeadLetterConfig:
+            Arn: !GetAtt InfraMindSecurityEventsDLQ.Arn
+          RetryPolicy:
+            MaximumEventAgeInSeconds: 86400
+            MaximumRetryAttempts: 5
+
+Outputs:
+  PrimaryQueueURL:
+    Description: Copy this URL into your .env as SQS_QUEUE_URL for ingestion_worker.py.
+    Value: !Ref InfraMindSecurityEventsQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-PrimaryQueueURL'
+
+  PrimaryQueueARN:
+    Description: ARN of the primary SQS security queue.
+    Value: !GetAtt InfraMindSecurityEventsQueue.Arn
+
+  DeadLetterQueueURL:
+    Description: SQS URL of the Dead-Letter Queue for investigating failed messages.
+    Value: !Ref InfraMindSecurityEventsDLQ
+
+  DeadLetterQueueARN:
+    Description: ARN of the Dead-Letter Queue.
+    Value: !GetAtt InfraMindSecurityEventsDLQ.Arn
+
+  PrerequisiteNotice:
+    Description: Verification check for active CloudTrail multi-region management logging.
+    Value: 'Ensure an active AWS CloudTrail trail is configured with management event logging in this AWS Region.'

@@ -23,6 +23,7 @@ from agent import (
     _validate_and_sanitize_analysis,
     analyze_security_log,
     ask_incident_history,
+    clear_analysis_cache,
     get_llm_config,
 )
 
@@ -31,6 +32,7 @@ class TestAgentAnalysis(unittest.TestCase):
     """Test security log event analysis, classification, and score bounding."""
 
     def setUp(self):
+        clear_analysis_cache()
         self.sample_s3_log = {
             "event_id": "evt-101",
             "event_source": "s3.amazonaws.com",

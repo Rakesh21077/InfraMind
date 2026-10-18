@@ -42,14 +42,14 @@
 
 ---
 
-### Slide 5: System Architecture & Data Flow
-- **Headline:** Clean, Modular, Multi-Tier Engineering Architecture
+### Slide 5: Version 2 — Real-Time Pipeline Architecture
+- **Headline:** Event-Driven CloudTrail & EventBridge Ingestion with Persistent SQLite WAL Storage
 - **Pipeline Stages:**
-  1. **Telemetry Ingestion:** AWS CloudTrail / Security Event Logs (`mock_logs.json`)
-  2. **AI Inference Engine (`agent.py`):** AMD Instinct GPU (ROCm vLLM) / Ollama fallback
-  3. **Operator Console (`app.py`):** Interactive Streamlit Web Dashboard
-  4. **Guardrail Remediation Engine (`remediation.py`):** Controlled Boto3 S3/IAM scripts
-  5. **Audit & Time-Machine:** Session-state logging and conversational query solver
+  1. **Telemetry Streaming:** AWS CloudTrail & GuardDuty stream via EventBridge to SQS with Dead-Letter Queue (DLQ).
+  2. **Ingestion Worker (`ingestion_worker.py`):** Long-polling worker normalizes events, checks S3 live posture, and persists atomically.
+  3. **Persistent Incident Store (`database.py`):** SQLite database in WAL mode with deduplication and remediation audit trails.
+  4. **AI Inference Engine (`agent.py`):** Multi-provider AI (AMD Instinct ROCm vLLM / Ollama) with deterministic rule-based fallback and caching.
+  5. **Auto-Refreshing Console (`app.py`):** Near-real-time Streamlit dashboard with dual-mode switcher (Demo vs. Live) and 1-click Boto3 remediation.
 
 ---
 
@@ -98,7 +98,10 @@
 - **Headline:** Frictionless Human-in-the-Loop Security Operations
 - **Key UI Capabilities:**
   - Executive KPI metrics: Total Alerts, Critical Threats, Awaiting Review, Remediated.
+  - Live Telemetry & Auto-Refresh: Real-time SQS queue depth, worker heartbeat, and 10s auto-refresh.
   - Threat cards with color-coded severity badges and explicit operator approval checkboxes.
+  - Multi-dimensional filters: Filter by Severity, Source (S3, IAM, GuardDuty), and Status.
+  - Raw Telemetry Inspector: Full JSON metadata modal for deep analyst inspection.
   - Incident Time-Machine: Natural language assistant answering questions like:
     - *"What API keys were flagged?"*
     - *"Which incidents are critical?"*
@@ -122,7 +125,8 @@
 - **Impact Metrics:**
   - **90% Reduction** in Mean Time to Remediate (MTTR) for critical cloud misconfigurations.
   - **100% Elimination** of human console navigation errors during emergency incidents.
-  - **Comprehensive QA:** 50 automated unit tests passing with zero errors.
+  - **Comprehensive QA:** 63 automated unit tests passing across remediation, agent, database, and ingestion suites.
+  - **Production Ready:** CloudFormation template (`infra/cloudformation-realtime.yaml`) for instant deployment.
 - **Future Roadmap:**
   - Multi-cloud expansion (Azure Blob Storage, Google Cloud IAM).
   - Integration with Slack/Teams webhook alerts for instant mobile approvals.

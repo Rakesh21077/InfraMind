@@ -1,14 +1,18 @@
 # InfraMind — AI Cloud Security Guardrail for Startups & IT
+## Version 2: Near-Real-Time Cloud Security & Controlled Remediation Platform
 
-![InfraMind Banner](https://img.shields.io/badge/Security-AI%20Guardrail-blue)
+![InfraMind Banner](https://img.shields.io/badge/Security-AI%20Guardrail%20v2-blue)
 ![Python](https://img.shields.io/badge/Python-3.12-brightgreen)
-![AWS Boto3](https://img.shields.io/badge/AWS-Boto3%20Remediation-orange)
+![AWS SQS](https://img.shields.io/badge/AWS-SQS%20%2B%20EventBridge-orange)
+![SQLite](https://img.shields.io/badge/Storage-SQLite%20WAL-lightblue)
 ![AMD ROCm](https://img.shields.io/badge/AMD%20ROCm-vLLM%20Serving-red)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
-![Tests](https://img.shields.io/badge/Tests-50%20Passed-success)
+![Tests](https://img.shields.io/badge/Tests-63%20Passed-success)
 ![Safety](https://img.shields.io/badge/Dry--Run-Enforced%20by%20Default-blueviolet)
 
-InfraMind is an AI-assisted cloud security threat detection, prioritization, and controlled auto-patching engine built for modern startups and IT engineering teams. It ingests AWS CloudTrail security events, evaluates risk severity (0–10) and blast radius using open-weights LLMs accelerated on AMD Instinct GPUs, and provides single-click, human-approved Boto3 automated cloud remediations.
+InfraMind is an AI-assisted cloud security threat detection, prioritization, and controlled auto-patching engine built for modern startups, IT engineering departments, and DevOps teams.
+
+It bridges the gap between raw AWS security telemetry (CloudTrail and GuardDuty) and safe cloud remediation. Operating in dual modes—**Demo Mode** (offline with curated mock logs) and **AWS Live-Ingestion Mode** (event-driven via EventBridge and SQS)—InfraMind analyzes threats using open-weights LLMs accelerated on AMD Instinct GPUs (with local Ollama and deterministic rule-based fallbacks), persists incidents in a thread-safe SQLite database, and executes controlled, single-click AWS Boto3 remediations with human-in-the-loop authorization.
 
 ---
 
@@ -28,56 +32,85 @@ InfraMind closes the gap between raw telemetry and safe cloud remediation throug
 
 ## 3. Proposed Solution
 InfraMind implements an automated, closed-loop telemetry pipeline:
-- **Real-Time Log Ingestion:** Parses CloudTrail and service events into normalized incident records.
-- **AI-Powered Threat Prioritization:** Evaluates incident severity, calculates blast radius (0–10), and generates plain-English risk summaries using Llama-3-8B.
+- **Dual Operating Modes:** Run offline with zero cloud credentials in **Demo Mode**, or stream genuine telemetry from an authorized AWS account in **AWS Live-Ingestion Mode**.
+- **Resilient Event Buffering:** Captures CloudTrail and GuardDuty events via Amazon EventBridge, buffered by an Amazon SQS Queue with an automated Dead-Letter Queue (DLQ).
+- **Background Ingestion Worker:** Long-polling worker (`ingestion_worker.py`) normalizes divergent schemas, verifies S3 live posture in read-only mode, and atomically commits events to SQLite.
+- **ACID Incident Persistence:** SQLite store with Write-Ahead Logging (WAL) ensures concurrent read/write access, analysis caching, and idempotent deduplication.
+- **AI-Powered Threat Prioritization:** Evaluates incident severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), calculates blast radius (0–10), and assigns whitelisted remediation actions using AMD ROCm vLLM or Ollama.
 - **Controlled Auto-Patching:** Standardized, test-verified Boto3 remediation scripts that execute safely with default dry-run simulation and explicit human authorization.
 - **Incident Time-Machine:** Conversational assistant for historical log queries and compliance audits.
 
 ---
 
 ## 4. Main Features
-- 🚨 **Active Threat Dashboard:** Interactive incident alert feed with color-coded severity badges (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
-- 🤖 **AMD GPU / vLLM Accelerated Inference:** Evaluates risk via open-weights `meta-llama/Meta-Llama-3-8B-Instruct` served with ROCm on AMD Instinct GPUs.
+- 🔄 **Dual Operating Modes:** Toggle between offline `demo` mode and real-time AWS `live` ingestion.
+- 📡 **Near-Real-Time Event Ingestion:** Dedicated background worker long-polling Amazon SQS (`WaitTimeSeconds=20`) with DLQ poison-pill isolation.
+- 🗄️ **Persistent SQLite Incident Store:** Thread-safe WAL mode storage preventing data loss across dashboard reboots.
+- 🚨 **Live Operator Console:** Streamlit dashboard with real-time SQS queue depth monitoring, worker heartbeat indicators, and configurable auto-refresh (10s).
+- 🔍 **Multi-Dimensional Query Filters:** Instant filtering by Severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), Event Source (`S3`, `IAM`, `GuardDuty`), and Status (`OPEN`, `RESOLVED`).
+- 📋 **Raw Telemetry Inspector:** In-depth JSON metadata inspector for deep security forensic analysis.
+- 🤖 **Multi-Provider AI Threat Engine:** Supports AMD Instinct GPUs (ROCm vLLM), local Ollama (`llama3:8b`), and rapid deterministic rule-based fallback.
 - 🛡️ **Safe Dry-Run Simulations by Default:** Zero accidental cloud mutations. `DRY_RUN=True` and `LIVE_EXECUTION_ENABLED=False` protect production.
 - ⚡ **1-Click Controlled Patching:**
   - **S3 Public Bucket Remediation:** Applies AWS S3 Public Access Block (enabling all 4 restriction flags).
   - **IAM Access Key Revocation:** Safely sets access keys to `Inactive` without deleting them, preserving CloudTrail forensic trails.
 - 🔒 **Defense-in-Depth Guardrails:** Mandatory operator approval checkboxes, exact identity validation, and automated lockout of root account keys.
 - 💬 **Incident Time-Machine:** Natural-language conversational assistant answering audit inquiries.
-- 🧪 **Comprehensive Quality Assurance:** 50 automated offline unit tests with 100% pass rate.
+- 🧪 **Comprehensive Quality Assurance:** 63 automated offline unit tests with 100% pass rate.
 
 ---
 
 ## 5. System Architecture
 
-```text
-[ AWS Cloud Logs / CloudTrail ]
-               │
-               ▼
-[ Telemetry Ingestion (mock_logs.json / Upload) ]
-               │
-               ▼
-[ AI Threat Analysis Engine (agent.py) ]
-   ├── Primary: AMD Instinct GPU (ROCm + vLLM)
-   ├── Alternative: Local Ollama (llama3:8b)
-   └── Resilient Fallback: Deterministic Rule-Based Engine
-               │
-               ▼
-[ Operator Console (app.py - Streamlit) ]
-   ├── Executive Metric KPIs (Total, Critical, Pending, Remediated)
-   ├── Threat Severity & Blast Radius Display
-   └── Human Authorization Checkbox (approved=True)
-               │
-               ▼
-[ Guardrail Remediation Engine (remediation.py) ]
-   ├── Dry-Run Mode: Safe Simulation Output (SIMULATED)
-   └── Live Execution: AWS Boto3 (put_public_access_block / update_access_key)
+```mermaid
+flowchart TD
+    subgraph IngestionSources ["1. Ingestion Sources"]
+        MOCK["Demo Mode: mock_logs.json"]
+        CT["Live Mode: AWS CloudTrail"]
+        GD["Live Mode: Amazon GuardDuty"]
+    end
+
+    subgraph Buffering ["2. AWS Event Routing & Buffering"]
+        EB["Amazon EventBridge"]
+        SQS["Amazon SQS Queue (SSE-SQS)"]
+        DLQ["Dead-Letter Queue (DLQ)"]
+        CT --> EB
+        GD --> EB
+        EB --> SQS
+        SQS -.->|5x Fail| DLQ
+    end
+
+    subgraph LocalWorker ["3. Worker & Persistent Storage"]
+        IW["ingestion_worker.py (Long Poll)"]
+        DB[("database.py (SQLite WAL)<br/>data/inframind.db")]
+        SQS ==> IW
+        IW -->|Normalize & Deduplicate| DB
+        IW -.->|Delete Message| SQS
+        MOCK -->|Direct Load| DB
+    end
+
+    subgraph AnalysisUI ["4. AI Engine & Operator Console"]
+        APP["app.py (Streamlit Console)"]
+        AGENT["agent.py (AMD vLLM / Ollama / Fallback)"]
+        DB <==> APP
+        APP <==> AGENT
+    end
+
+    subgraph Remediation ["5. Guardrail Remediation Engine"]
+        REM["remediation.py (Boto3)"]
+        APP ==>|Human Approval + Circuit Breaker| REM
+        REM -->|DRY_RUN=True| SIM["Simulated Response"]
+        REM -->|LIVE_EXECUTION=True| AWS["AWS Cloud APIs"]
+        REM -->|Audit Log| DB
+    end
 ```
 
 ---
 
 ## 6. Technology Stack
 - **Backend & Logic:** Python 3.10+ (tested on Python 3.12)
+- **Persistence:** SQLite 3 (WAL Mode, Thread-Safe)
+- **Cloud Infrastructure:** AWS CloudFormation, Amazon EventBridge, Amazon SQS, CloudTrail, GuardDuty
 - **Cloud SDK:** AWS Boto3 & Botocore
 - **Web UI & Dashboard:** Streamlit
 - **LLM Serving & Inference:** AMD Developer Cloud (ROCm vLLM) / Ollama / OpenAI Standard API
@@ -94,29 +127,39 @@ InfraMind-Team/
 |
 |-- app.py                     # Streamlit web dashboard & Incident Time-Machine
 |-- agent.py                   # AI log evaluation engine & conversational query solver
+|-- database.py                # Thread-safe SQLite persistence layer (WAL mode & audit log)
+|-- ingestion_worker.py        # Background SQS long-polling worker & event normalizer
 |-- remediation.py             # Member 3: S3 & IAM cloud remediation scripts & safety gates
 |-- mock_logs.json             # Realistic CloudTrail security incident events (S3 & IAM)
 |-- requirements.txt           # Unified project runtime dependencies
 |-- .env.example               # Safe environment configuration template
-|-- .gitignore                 # Excludes .env, virtual environments, and caches
+|-- .gitignore                 # Excludes .env, virtual environments, databases, and caches
 |-- deploy_amd.sh              # AMD ROCm vLLM docker container deployment script
 |-- README.md                  # Master project architecture and operational guide
 |-- README_MEMBER3.md          # Dedicated technical guide for Member 3 module
 |-- sample_incidents.json      # Sample data contract for Member 2 & Member 5
 |-- build_pitch_deck.py        # Script generating 12-slide PowerPoint presentation
 |
+|-- infra/
+|   `-- cloudformation-realtime.yaml # CloudFormation template for SQS, DLQ, and EventBridge
+|
 |-- docs/
-|   `-- architecture.md        # Technical architecture, sequence diagrams, and risk notes
+|   |-- architecture.md        # Technical architecture, sequence diagrams, and risk notes
+|   |-- realtime_architecture.md # Real-time pipeline specs, failure modes, and retry rules
+|   |-- aws_setup.md           # Step-by-step AWS CLI setup, stack deployment, and IAM policies
+|   `-- security_controls.md   # Defense-in-depth, dry-run, and key deactivation rules
 |
 |-- presentation/
 |   |-- InfraMind_Pitch_Deck.pptx # Editable 12-slide widescreen PowerPoint pitch deck
 |   |-- slides_content.md      # Markdown transcript of all 12 pitch deck slides
 |   `-- demo_script.md         # Timed 5-minute presenter script & video storyboard
 |
-|-- tests/
-|   |-- __init__.py            # Test package marker
-|   |-- test_remediation.py    # 34 Member 3 remediation & safety tests
-|   `-- test_agent.py          # 16 AI analysis, LLM client, and chat history tests
+`-- tests/
+    |-- __init__.py            # Test package marker
+    |-- test_remediation.py    # 34 Member 3 remediation & safety tests
+    |-- test_agent.py          # 16 AI analysis, LLM client, and chat history tests
+    |-- test_database.py       # 6 SQLite persistence, schema, and audit tests
+    `-- test_ingestion.py      # 7 SQS worker, normalization, and DLQ lifecycle tests
 ```
 
 ---
@@ -134,7 +177,7 @@ python --version
 
 ---
 
-## 9. Windows Step-by-Step Setup
+## 9. Setup & Installation
 
 ```powershell
 # 1. Clone or navigate to the repository
@@ -148,20 +191,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 # 4. Activate the virtual environment
 .\.venv\Scripts\Activate.ps1
-```
 
----
-
-## 10. Dependency Installation
-
-```powershell
+# 5. Install runtime dependencies
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
 ---
 
-## 11. Environment Configuration
+## 10. Environment Configuration
 
 Copy the template `.env.example` into a local `.env`:
 ```powershell
@@ -170,163 +208,133 @@ Copy-Item .env.example .env
 
 Contents of `.env`:
 ```ini
-# AI / LLM Serving Configuration (AMD GPU Endpoint)
-AMD_ENDPOINT_URL="http://localhost:11434/v1"
-MODEL_NAME="llama3:8b"
+# Operating Mode: demo (offline mock_logs.json) or live (Amazon SQS ingestion)
+APP_MODE=demo
 
-# AWS Configuration
-AWS_DEFAULT_REGION="us-east-1"
+# AWS Region & Credentials (used in live mode)
+AWS_REGION=us-east-1
+AWS_DEFAULT_REGION=us-east-1
+# Leave empty to use local AWS CLI profile (~/.aws/credentials)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 
-# Member 3: Auto-Patch & Remediation Safety Controls
-# When DRY_RUN is True, all remediation actions run in simulation mode without calling AWS
-DRY_RUN="True"
+# Ingestion SQS Queue URL (from CloudFormation stack output)
+SQS_QUEUE_URL=
 
-# Master circuit breaker for live AWS API remediation calls.
-# Requires both DRY_RUN=False and LIVE_EXECUTION_ENABLED=True plus human approval to execute.
-LIVE_EXECUTION_ENABLED="False"
+# Database & Ingestion Worker
+DATABASE_PATH=data/inframind.db
+WORKER_POLL_INTERVAL=20
+DASHBOARD_REFRESH_SECONDS=10
+
+# AI Threat Engine Provider: amd, ollama, or deterministic_fallback
+AI_PROVIDER=amd
+AMD_ENDPOINT_URL=http://localhost:11434/v1
+MODEL_NAME=meta-llama/Meta-Llama-3-8B-Instruct
+
+# Member 3 Guardrail Safety Controls
+DRY_RUN=True
+LIVE_EXECUTION_ENABLED=False
 ```
 
 > **Safety Notice:** `.env` is excluded from Git via `.gitignore`. Never hardcode AWS secrets or tokens.
 
 ---
 
-## 12. Local Ollama Alternative Setup (Optional)
-If running a local LLM on developer machines:
-1. Install Ollama from [ollama.com](https://ollama.com).
-2. Pull and start the Llama-3 model:
-   ```bash
-   ollama run llama3:8b
-   ```
-3. Set `AMD_ENDPOINT_URL="http://localhost:11434/v1"` in `.env`.
+## 11. Running InfraMind
 
-*Note: If no local model is running, InfraMind automatically falls back to its built-in deterministic rule-based engine.*
+### Mode A: Demo Mode (Offline, Zero Credentials)
+In Demo Mode, InfraMind loads sample security events from `mock_logs.json`. Run with a single terminal command:
 
----
-
-## 13. AMD Developer Cloud Endpoint Configuration
-For high-performance GPU serving on AMD Developer Cloud (Instinct MI300X/MI250 GPUs):
-1. Execute the containerized deployment script:
-   ```bash
-   bash deploy_amd.sh
-   ```
-   Or launch manually with Docker:
-   ```bash
-   docker run -d --rm \
-     --network=host \
-     --device=/dev/kfd --device=/dev/dri \
-     --group-add video \
-     --ipc=host \
-     rocm/vllm:latest \
-     python3 -m vllm.entrypoints.openai.api_server \
-       --model meta-llama/Meta-Llama-3-8B-Instruct \
-       --port 8000
-   ```
-2. In your `.env`, update the endpoint URL:
-   ```ini
-   AMD_ENDPOINT_URL="http://<YOUR_AMD_INSTANCE_IP>:8000/v1"
-   MODEL_NAME="meta-llama/Meta-Llama-3-8B-Instruct"
-   ```
-
----
-
-## 14. Running the Streamlit Application
-
-Launch the interactive web console:
 ```powershell
 streamlit run app.py
 ```
+Open your browser at `http://localhost:8501`.
 
-Open your browser to:
-```text
-http://localhost:8501
+### Mode B: AWS Live-Ingestion Mode (Real Telemetry)
+In Live Mode, run the background worker and the operator dashboard in two separate PowerShell terminal windows:
+
+#### Terminal 1: Background Ingestion Worker
+```powershell
+# In C:\Users\santh\InfraMind-Team
+.\.venv\Scripts\Activate.ps1
+python ingestion_worker.py
 ```
+The worker connects to SQS, performs 20-second long-polling, normalizes incoming CloudTrail/GuardDuty events, checks live S3 posture, and persists incidents into `data/inframind.db`.
+
+#### Terminal 2: Streamlit Operator Console
+```powershell
+.\.venv\Scripts\Activate.ps1
+streamlit run app.py
+```
+The dashboard auto-refreshes every 10 seconds, displays SQS queue metrics, and surfaces incoming threats immediately.
 
 ---
 
-## 15. How the AI Log Analysis Works
-When an operator clicks **"🤖 Analyze Alert via AMD GPU"**:
-1. `agent.py` validates the log dictionary.
-2. Dispatches telemetry to the configured model endpoint with strict JSON schema instructions.
-3. Normalizes priority into `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW`.
-4. Computes a threat score (0–10) and blast radius risk estimate (0–10).
-5. Maps the threat to a pre-vetted remediation action (`fix_s3_bucket`, `revoke_iam_key`, or `none`).
-6. If the model endpoint is unreachable or times out, the resilient deterministic engine produces the calibrated assessment instantly.
+## 12. Deploying AWS Infrastructure via CloudFormation
+To enable live telemetry ingestion, deploy the provided CloudFormation template:
+
+```powershell
+aws cloudformation deploy `
+  --template-file infra/cloudformation-realtime.yaml `
+  --stack-name inframind-realtime-telemetry `
+  --capabilities CAPABILITY_IAM `
+  --region us-east-1
+```
+For complete step-by-step instructions, see [`docs/aws_setup.md`](file:///C:/Users/santh/InfraMind-Team/docs/aws_setup.md).
 
 ---
 
-## 16. How to Use the Incident Time-Machine
-1. Click the **"🤖 Incident Time-Machine (AI Assistant)"** tab.
-2. Click any of the pre-built audit query buttons or type a custom question:
-   - *"What API keys were flagged?"*
-   - *"Which incidents are critical?"*
-   - *"What happened to the S3 bucket?"*
-   - *"What remediation was recommended for evt-101?"*
-   - *"Which incidents are still unresolved?"*
-3. The assistant interrogates the loaded security logs and audit history, returning structured markdown summaries.
+## 13. Running Automated Unit Tests
 
----
-
-## 17. How the Remediation Functions Work
-
-### S3 Public Bucket Remediation (`fix_s3_bucket`)
-- **API Call:** AWS S3 `put_public_access_block()`
-- **Configuration:** Enforces all four flags:
-  - `BlockPublicAcls = True`
-  - `IgnorePublicAcls = True`
-  - `BlockPublicPolicy = True`
-  - `RestrictPublicBuckets = True`
-
-### IAM Access Key Revocation (`revoke_iam_key`)
-- **API Call:** AWS IAM `update_access_key(Status='Inactive')`
-- **Forensic Guarantee:** Deactivates the key immediately while preserving it for CloudTrail forensic investigation. Never deletes keys.
-
----
-
-## 18. How Dry-Run and Explicit Approval Work
-InfraMind uses multi-layer defense-in-depth:
-1. **Simulation Default:** `DRY_RUN=True` simulates all actions and returns `SIMULATED`.
-2. **Circuit Breaker:** `LIVE_EXECUTION_ENABLED=False` prevents live cloud calls unless explicitly enabled.
-3. **Mandatory Human Approval:** In the UI, the operator must review the exact target resource and check the authorization box before clicking **"⚡ Approve & Execute Patch"**.
-4. **Root Protection:** Automated deactivation of root account credentials is hardcoded as `BLOCKED`.
-
----
-
-## 19. How to Run Automated Unit Tests
-
-Run the complete 50-test automated test suite:
+Execute the complete 63-test automated test suite:
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
 Expected output:
 ```text
-Ran 50 tests in 0.910s
+test_s3_successful_api_call_returns_success ... ok
+test_iam_successful_api_call_returns_success ... ok
+test_database_crud_and_deduplication ... ok
+test_ingestion_sqs_message_lifecycle ... ok
+...
+Ran 63 tests in 1.266s
 
 OK
 ```
-- All tests execute 100% offline. Zero AWS network calls or real credentials required.
+- **100% Offline:** All 63 tests run without internet connection, AWS accounts, or mock servers.
+- **Coverage:** Input validation, Boto3 S3/IAM mocks, LLM parsing, rule-based fallback, SQLite CRUD/WAL, SQS worker lifecycle, and poison-pill recovery.
 
 ---
 
-## 20. Troubleshooting
+## 14. Safety Controls & Guardrails Summary
+
+1. **Simulation Default:** `DRY_RUN=True` simulates all actions and returns `SIMULATED`.
+2. **Circuit Breaker:** `LIVE_EXECUTION_ENABLED=False` prevents live cloud calls unless explicitly enabled.
+3. **Mandatory Human Approval:** In the UI, the operator must review the exact target resource and check the authorization box before clicking **"⚡ Approve & Execute Patch"**.
+4. **Non-Destructive IAM Revocation:** IAM keys are set to `Inactive` rather than deleted, preserving forensic evidence for CloudTrail audits.
+5. **Root Protection:** Automated deactivation of root account credentials is hardcoded as `BLOCKED`.
+6. **SQS Invariant:** Messages are deleted from SQS *strictly after* successful database persistence.
+7. **Secret Redaction:** Access keys, tokens, and authorization headers are automatically redacted from logs and audit trails.
+
+For detailed security specifications, see [`docs/security_controls.md`](file:///C:/Users/santh/InfraMind-Team/docs/security_controls.md).
+
+---
+
+## 15. Troubleshooting
 
 | Issue | Cause | Resolution |
-|---|---|---|
+| :--- | :--- | :--- |
 | `running scripts is disabled` | PowerShell execution policy restricted | Run `Set-ExecutionPolicy -Scope Process Bypass`. |
 | `ModuleNotFoundError: No module named 'streamlit'` | Virtual environment not activated | Run `.\.venv\Scripts\Activate.ps1` and verify `pip list`. |
+| `LIVE INGESTION: NOT CONFIGURED` | `SQS_QUEUE_URL` is empty in `.env` | Set `SQS_QUEUE_URL` to your CloudFormation queue URL or switch `APP_MODE=demo`. |
 | Remediation returns `SIMULATED` | Safe local mode is active (`DRY_RUN=True`) | Expected behavior. For real cloud changes, configure valid AWS credentials, set `DRY_RUN=False`, `LIVE_EXECUTION_ENABLED=True`, and pass `approved=True`. |
 | AI Engine reports `Offline Fallback` | AMD/Ollama model server not running | Application remains fully functional via deterministic rule-based analysis. Start Ollama (`ollama run llama3:8b`) or AMD vLLM container if LLM output is desired. |
 | Remediation returns `BLOCKED` | Approval checkbox unchecked or root user targeted | Check the operator authorization box. If targeting root account, use AWS Management Console manually. |
 
 ---
 
-## 21. Security & Operational Limitations
-- **Blast Radius Score:** The blast radius score (0–10) is an estimated risk proxy based on telemetry indicators. It does not perform live dependency graph traversal unless integrated with production asset management systems.
-- **Service Disruption Notice:** Setting an IAM key to `Inactive` or enabling Public Access Block may interrupt dependent services that intentionally rely on anonymous read access or that key.
-
----
-
-## 22. Member 3 & Member 5 Interface Information
+## 16. Team Responsibilities & Module Integration
 - **Member 3 (Auto-Patch Engine):**
   - File: [`remediation.py`](file:///C:/Users/santh/InfraMind-Team/remediation.py)
   - Documentation: [`README_MEMBER3.md`](file:///C:/Users/santh/InfraMind-Team/README_MEMBER3.md)
