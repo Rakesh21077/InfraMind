@@ -1,4 +1,17 @@
-# InfraMind - Team Dependencies
-# Member 3: Auto-Patch & Cloud Remediation Engine
+# InfraMind — Complete Project Dependencies
+# AI Cloud Security Guardrail for Startups & IT
+
+# Web Interface & Interactive Dashboard (Member 5 & Full App)
+streamlit>=1.32.0
+
+# LLM Inference Client - OpenAI Standard API Compatible (AMD vLLM / Ollama) (Member 2)
+openai>=1.14.0
+
+# AWS Cloud SDK for Automated Patch & Remediation (Member 3)
 boto3>=1.34.0
+
+# Environment Variable & Configuration Management
 python-dotenv>=1.0.0
+
+# Presentation Generation (Pitch Deck)
+python-pptx>=0.6.21

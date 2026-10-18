@@ -1,0 +1,89 @@
+[
+  {
+    "event_id": "evt-101",
+    "timestamp": "2026-10-18T10:15:30Z",
+    "event_source": "s3.amazonaws.com",
+    "event_name": "PutBucketAcl",
+    "aws_region": "us-east-1",
+    "resource_type": "AWS::S3::Bucket",
+    "resource_id": "inframind-customer-data-backup",
+    "user_identity": {
+      "type": "IAMUser",
+      "principal_id": "AIDAEXAMPLEADMINUSER",
+      "user_name": "cloud-admin-dave"
+    },
+    "details": "Public-read and public-write ACL was granted to AllUsers group (http://acs.amazonaws.com/groups/global/AllUsers). Bucket contains confidential customer backups and PII data.",
+    "request_parameters": {
+      "bucketName": "inframind-customer-data-backup",
+      "AccessControlPolicy": {
+        "Grants": [
+          {
+            "Grantee": {
+              "URI": "http://acs.amazonaws.com/groups/global/AllUsers"
+            },
+            "Permission": "FULL_CONTROL"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "event_id": "evt-102",
+    "timestamp": "2026-10-18T11:02:14Z",
+    "event_source": "iam.amazonaws.com",
+    "event_name": "CreateAccessKey",
+    "aws_region": "us-east-1",
+    "resource_type": "AWS::IAM::AccessKey",
+    "resource_id": "AKIAIOSFODNN7EXAMPLE",
+    "user_name": "demo-compromised-user",
+    "user_identity": {
+      "type": "IAMUser",
+      "principal_id": "AIDACOMPROMISEDUSER7",
+      "user_name": "demo-compromised-user"
+    },
+    "details": "Active IAM access key was detected in a public GitHub repository commit. Security scanner verified credential leakage with high-privilege administrative access.",
+    "request_parameters": {
+      "userName": "demo-compromised-user",
+      "accessKeyId": "AKIAIOSFODNN7EXAMPLE"
+    }
+  },
+  {
+    "event_id": "evt-103",
+    "timestamp": "2026-10-18T11:45:00Z",
+    "event_source": "s3.amazonaws.com",
+    "event_name": "PutBucketPolicy",
+    "aws_region": "us-east-1",
+    "resource_type": "AWS::S3::Bucket",
+    "resource_id": "inframind-finance-records-2026",
+    "user_identity": {
+      "type": "IAMUser",
+      "principal_id": "AIDAFINANCEUSER9",
+      "user_name": "finance-analyst-bob"
+    },
+    "details": "Bucket policy updated to allow wildcard principal ('*') read access (s3:GetObject) across financial audit reports without IP or VPC restrictions.",
+    "request_parameters": {
+      "bucketName": "inframind-finance-records-2026",
+      "Policy": "{\"Statement\": [{\"Effect\": \"Allow\", \"Principal\": \"*\", \"Action\": \"s3:GetObject\"}]}"
+    }
+  },
+  {
+    "event_id": "evt-104",
+    "timestamp": "2026-10-18T12:20:10Z",
+    "event_source": "iam.amazonaws.com",
+    "event_name": "UpdateAccessKey",
+    "aws_region": "us-east-1",
+    "resource_type": "AWS::IAM::AccessKey",
+    "resource_id": "AKIA222233334444EXMP",
+    "user_name": "contractor-external-dev",
+    "user_identity": {
+      "type": "IAMUser",
+      "principal_id": "AIDACONTRACTOR123",
+      "user_name": "contractor-external-dev"
+    },
+    "details": "Contractor access key used from anomalous geographical location outside authorized VPN IP range with unauthorized IAM credential usage attempts.",
+    "request_parameters": {
+      "userName": "contractor-external-dev",
+      "accessKeyId": "AKIA222233334444EXMP"
+    }
+  }
+]
